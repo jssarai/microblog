@@ -137,9 +137,8 @@ app.get('/profile', isAuthenticated, (req, res) => {
 app.get('/avatar/:username', (req, res) => {
     // TODO: Serve the avatar image for the user
 });
-app.post('/register', (req, res) => {
-    // TODO: Register a new user
-});
+app.post('/register', (req, res) => {registerUser(req, res)});
+
 app.post('/login', (req, res) => {
     // TODO: Login a user
 });
@@ -197,9 +196,18 @@ function isAuthenticated(req, res, next) {
     }
 }
 
+
+usernames = []
+
 // Function to register a user
 function registerUser(req, res) {
-    // TODO: Register a new user and redirect appropriately
+    const username = req.body.username;
+    if (usernames.contains(username)) {
+        res.redirect('/register?error=Username+already+exists');
+    } else {
+        addUser(username);
+        res.redirect('/login');
+    }
 }
 
 // Function to login a user
