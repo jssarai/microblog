@@ -139,12 +139,10 @@ app.get('/avatar/:username', (req, res) => {
 });
 app.post('/register', (req, res) => {registerUser(req, res)});
 
-app.post('/login', (req, res) => {
-    // TODO: Login a user
-});
-app.get('/logout', (req, res) => {
-    // TODO: Logout the user
-});
+app.post('/login', (req, res) => {loginUser(req, res)});
+
+app.get('/logout', (req, res) => {logoutUser(req, res)});
+
 app.post('/delete/:id', isAuthenticated, (req, res) => {
     // TODO: Delete a post if the current user is the owner
 });
@@ -162,28 +160,50 @@ app.listen(PORT, () => {
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 // Example data for posts and users
+
+
+
 let posts = [
     { id: 1, title: 'Sample Post', content: 'This is a sample post.', username: 'SampleUser', timestamp: '2024-01-01 10:00', likes: 0 },
     { id: 2, title: 'Another Post', content: 'This is another sample post.', username: 'AnotherUser', timestamp: '2024-01-02 12:00', likes: 0 },
 ];
+
+let users = [];
+/*
 let users = [
     { id: 1, username: 'SampleUser', avatar_url: undefined, memberSince: '2024-01-01 08:00' },
     { id: 2, username: 'AnotherUser', avatar_url: undefined, memberSince: '2024-01-02 09:00' },
 ];
-
+*/
 // Function to find a user by username
 function findUserByUsername(username) {
     // TODO: Return user object if found, otherwise return undefined
+    let user = users.find(e => e.username === username);
+    if(user) {
+        return user
+    } else {
+        return undefined;
+    }
 }
 
 // Function to find a user by user ID
 function findUserById(userId) {
     // TODO: Return user object if found, otherwise return undefined
+    let user = users.find(e => e.id === userId);
+    if(user) {
+        return user
+    } else {
+        return undefined;
+    }
 }
 
 // Function to add a new user
 function addUser(username) {
     // TODO: Create a new user object and add to users array
+    let user = new Object();
+    user.username = username;
+    user.id = users.length+1;
+    users.push(user)
 }
 
 // Middleware to check if user is authenticated
@@ -197,12 +217,10 @@ function isAuthenticated(req, res, next) {
 }
 
 
-usernames = []
-
 // Function to register a user
 function registerUser(req, res) {
     const username = req.body.username;
-    if (usernames.contains(username)) {
+    if (findUserByUsername(username)) {
         res.redirect('/register?error=Username+already+exists');
     } else {
         addUser(username);
@@ -213,6 +231,15 @@ function registerUser(req, res) {
 // Function to login a user
 function loginUser(req, res) {
     // TODO: Login a user and redirect appropriately
+    const username = req.body.username;
+    let user = findUserByUsername(username);
+    if (user) {
+        req.session.userId = user.id;
+        req.session.loggedIn = true;
+        res.redirect('/');
+    } else {
+        res.redirect('/login?error=Username+does+not+exist');
+    }
 }
 
 // Function to logout a user
@@ -238,6 +265,7 @@ function handleAvatar(req, res) {
 // Function to get the current user from session
 function getCurrentUser(req) {
     // TODO: Return the user object if the session user ID matches
+    return findUserById(req.session.userId);
 }
 
 // Function to get all posts, sorted by latest first
