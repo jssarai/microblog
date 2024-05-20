@@ -1,4 +1,4 @@
-{{! Use the main layout }}
+div{{! Use the main layout }}
 {{!< main }}
 
 {{! New Post Submission Form }}
@@ -7,10 +7,12 @@
         <!-- show the create post form when logged in -->
         <section class="post-form">
             <!-- make a header here -->
+            <h1>Post</h1>
             <form action="/posts" method="POST">
                 <!-- title input field name = "title" -->
+                <input type="text" name="title">
                 <!-- text area input field name = "content" -->
-
+                <input id="post-content" type="text" name="content">
                 <div class="form-actions">
                     <button type="button" class="emoji-button" onclick="toggleEmojiPanel()">😀</button>
                     <button type="submit" class="post-button">Post</button>
@@ -18,6 +20,10 @@
             </form>
 
             <div id="emoji-container" class="emoji-panel" style="display: none;">
+                <input id='emoji-search' oninput="searchEmojis()">
+                <div id='emoji-grid'>
+
+                </div>
                 <!-- input field for the emoji search, use oninput="searchEmojis() -->
                 <!-- a div, id = "emoji-grid" -->
             </div>
@@ -30,7 +36,7 @@
         {{#if posts.length}}
         <ul>
             {{#each posts}}
-                <!-- you have to pass the user in to posts and this is the syntax -->
+                <!-- you have to pass the user in to posts and this is the syntax -->  
                 {{> post this user=../user}}            
             {{/each}}
         </ul>
@@ -60,6 +66,11 @@ function toggleEmojiPanel() {
 
     if(container.style.display === 'block' && allEmojis.length == 0){
         // go "Fetch" you some emojis and show them off with displayEmojies
+        let url = 'https://emoji-api.com/emojis?access_key=81666a4b2fa2ebf6e78c06a5c6945a13d0391438';
+        fetch(url)
+        .then(res => res.json())
+        .then(data => allEmojis = data)
+        .catch(error => console.error("Error", error));
     }
 }
 
@@ -84,18 +95,25 @@ function searchEmojis() {
     const searchTerm = document.getElementById('emoji-search').value.toLowerCase();
     // array.filter takes a predicate
     // use string.includes. 
-
-    const filteredEmojis = allEmojis.filter(...);
-    
+    const filteredEmojis = allEmojis.filter(e => e.slug.includes(searchTerm));
     displayEmojis(filteredEmojis);
 }
 
 function insertEmoji(emoji) {
     // put an emoji on a form somehow. 
-
+    textarea = document.getElementById('post-content')
+    textarea.value += emoji;
     // do this when you're doing getting the emoji on the form
     //
     textarea.focus();  // Keep focus on the textarea
+    /*
+    let input = document.getElementById('post-content');
+    curr = input.value;
+    let updated = curr + emoji;
+    console.log(updated);
+    input.value = updated;
+    */
+
 }
 </script>
 

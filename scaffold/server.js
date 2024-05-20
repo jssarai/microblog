@@ -121,18 +121,25 @@ app.get('/error', (req, res) => {
 
 // Additional routes that you must implement
 
-
+/*
 app.get('/post/:id', (req, res) => {
     // TODO: Render post detail page
 });
+*/
 app.post('/posts', (req, res) => {
     // TODO: Add a new post and redirect to home
+    addPost(req.body.title, req.body.content, getCurrentUser(req));
+    res.redirect('/');
 });
-app.post('/like/:id', (req, res) => {
-    // TODO: Update post likes
-});
+    
+    
+
+app.post('/like/:id', (req, res) => {updatePostLikes(req, res)});
+
 app.get('/profile', isAuthenticated, (req, res) => {
     // TODO: Render profile page
+    let user = getCurrentUser(req);
+    res.render('profile', { user });
 });
 app.get('/avatar/:username', (req, res) => {
     // TODO: Serve the avatar image for the user
@@ -143,9 +150,8 @@ app.post('/login', (req, res) => {loginUser(req, res)});
 
 app.get('/logout', (req, res) => {logoutUser(req, res)});
 
-app.post('/delete/:id', isAuthenticated, (req, res) => {
+app.post('/delete/:id', isAuthenticated, (req, res) => {removePost(req, res)});
     // TODO: Delete a post if the current user is the owner
-});
 
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 // Server Activation
@@ -203,6 +209,7 @@ function addUser(username) {
     let user = new Object();
     user.username = username;
     user.id = users.length+1;
+    user.posts = [];
     users.push(user)
 }
 
@@ -233,17 +240,22 @@ function loginUser(req, res) {
     // TODO: Login a user and redirect appropriately
     const username = req.body.username;
     let user = findUserByUsername(username);
-    if (user) {
+    if (user) {//valid
         req.session.userId = user.id;
         req.session.loggedIn = true;
         res.redirect('/');
-    } else {
+    } else {//invalid user
         res.redirect('/login?error=Username+does+not+exist');
     }
 }
 
 // Function to logout a user
 function logoutUser(req, res) {
+    let user = getCurrentUser(req)
+    req.session.userId = '';
+    req.session.loggedIn = false;
+    res.redirect('/');
+
     // TODO: Destroy session and redirect appropriately
 }
 
@@ -254,7 +266,32 @@ function renderProfile(req, res) {
 
 // Function to update post likes
 function updatePostLikes(req, res) {
+    if (!req.session.loggedIn) {
+        return
+    }
+    let user = getCurrentUser(req);
+    let id = req.params.id;
+    let post = posts.find(e => e.id == id);
+    if (!(user.posts.includes(post))) {
+        post.likes = post.likes + 1;
+    }
+    res.json({ "postId": post.id, "likes": post.likes });
     // TODO: Increment post likes if conditions are met
+
+}
+
+function removePost(req, res) {
+    if (!req.session.loggedIn) {
+        return
+    }
+    let user = getCurrentUser(req);
+    let id = req.params.id;
+    let post = posts.find(e => e.id == id);
+    if (post.username === user.username) {
+        posts = posts.filter(e => e.id != id); 
+        delete post;
+        res.json({ "postId": id});
+    }
 }
 
 // Function to handle avatar generation and serving
@@ -276,7 +313,19 @@ function getPosts() {
 // Function to add a new post
 function addPost(title, content, user) {
     // TODO: Create a new post object and add to posts array
+    let post = new Object();
+    post.id = posts[posts.length-1].id+1;
+    post.title = title;
+    post.content = content;
+    post.username = user.username;
+    post.likes = 0;
+    
+    posts.push(post);
+
+    user.posts.push(post);
 }
+
+
 
 // Function to generate an image avatar
 function generateAvatar(letter, width = 100, height = 100) {
