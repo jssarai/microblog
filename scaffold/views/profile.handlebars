@@ -1,19 +1,24 @@
 {{! Use the main layout }}
 {{!< main }}
 
+<div class="profile-page">
 <div class="profile-container">
     <div class="profile-avatar">
+        <img src={{user.avatar_url}} alt="Pofile Image" title="Avatar" class="avatar">
         <!-- Correct path for the default avatar image -->
     </div>
     
     <section class="profile-info">
+        <h3>User Profile</h3>
+        <p>Username: {{user.username}}</p>
+        <p>Member Since: {{user.memberSince}}</p>
         <!-- user profile info -->
     </section>
 </div>
 
 <section class="user-posts">
     <!-- you can call posts tweets, or truths, or whatever, these are neologisms. Choose your own new in server.js -->
-    <h2>Your {{{postNeoType}}}s</h2>
+    <h2 class="posts-title">Your {{{postNeoType}}}s</h2>
     
     <!-- you'll need to make this conditaionl and #each expression work -->
     {{#if user.posts.length}}
@@ -27,3 +32,4 @@
         <p>You have not posted yet, poster.</p>
     {{/if}}
 </section>
+</div>

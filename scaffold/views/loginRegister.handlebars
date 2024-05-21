@@ -9,9 +9,9 @@
             <p style="color: red;">{{loginError}}</p>
         {{/if}}
         <form action="/login" method="POST">
-            <<!-- the login form goes here -->    >
-            <input type="text" name="username">    
-             <button type="submit">Login</button>
+            <!-- the login form goes here -->
+            <input type="text" name="username" placeholder="username">    
+             <button class="post-button" type="submit">Login</button>
         </form>
     </section>
 
@@ -25,8 +25,8 @@
         {{/if}}
         <form action="/register" method="POST">
             <!-- the registration form goes here -->
-            <input type="text" name="username">
-            <button type="submit">Register</button>
+            <input type="text" name="username" placeholder="username">
+            <button class="post-button" type="submit">Register</button>
         </form>
     </section>
 </section>

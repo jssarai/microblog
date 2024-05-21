@@ -1,4 +1,4 @@
-div{{! Use the main layout }}
+{{! Use the main layout }}
 {{!< main }}
 
 {{! New Post Submission Form }}
@@ -7,12 +7,12 @@ div{{! Use the main layout }}
         <!-- show the create post form when logged in -->
         <section class="post-form">
             <!-- make a header here -->
-            <h1>Post</h1>
-            <form action="/posts" method="POST">
+            <h2>Join the Conversation</h2>
+            <form class='post-form' action="/posts" method="POST">
                 <!-- title input field name = "title" -->
-                <input type="text" name="title">
+                <textarea class="post-title" type="text" name="title" placeholder="Title"></textarea>
                 <!-- text area input field name = "content" -->
-                <input id="post-content" type="text" name="content">
+                <textarea id="post-content" type="text" name="content" placeholder="Body"></textarea>
                 <div class="form-actions">
                     <button type="button" class="emoji-button" onclick="toggleEmojiPanel()">😀</button>
                     <button type="submit" class="post-button">Post</button>
@@ -34,6 +34,7 @@ div{{! Use the main layout }}
         <!-- recent posts -->
 
         {{#if posts.length}}
+        <h2 class="posts-title">Recent Posts</h2>
         <ul>
             {{#each posts}}
                 <!-- you have to pass the user in to posts and this is the syntax -->  
@@ -106,13 +107,6 @@ function insertEmoji(emoji) {
     // do this when you're doing getting the emoji on the form
     //
     textarea.focus();  // Keep focus on the textarea
-    /*
-    let input = document.getElementById('post-content');
-    curr = input.value;
-    let updated = curr + emoji;
-    console.log(updated);
-    input.value = updated;
-    */
 
 }
 </script>

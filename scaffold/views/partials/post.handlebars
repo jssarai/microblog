@@ -2,20 +2,21 @@
 <div id={{id}} class="post">
     <div class="post-avatar">
         <!-- the user's avatar -->
+        <img src={{avatar_url}} alt="Profile Image" title="Avatar" class="avatar">
+        
     </div>
     <div class="post-content preserve-newlines">
         <!-- the post -->
-        <h2>{{title}}</h2>
+        <h3>{{title}}</h3>
         <p>{{content}}</p>
         <div class="post-status-bar">
-            <span>
                 {{#ifCond username user.username}}
-                    <button onclick=handleDeleteClick({{id}})> Delete Button</button>
+                    <p  class='hover' onclick=handleDeleteClick(({{id}}))>🗑️ {{likes}}</p>
                 {{else}}
-                    <button onclick=handleLikeClick(({{id}}))> Like Button</button>
+                    <p class = ' hover not-liked likes' onclick=handleLikeClick(({{id}}))>🤍 {{likes}}</p>
                 {{/ifCond}}
-                <p class = 'likes'>Likes: {{likes}}</p>
-            </span>
+                <p>{{username}}</p>
+                <p>{{timestamp}}</p>
             <!-- everything that is shown in the status bar -->
             <!-- Heart = ♥ -->
             <!-- font awesome  trashcan = <i class="fas fa-trash-alt"> </i>-->
@@ -23,13 +24,22 @@
     </div>
 </div>
 <script>
+
     function handleLikeClick(postId) {
+        let post = document.getElementById(postId);
+        let likesEle = post.querySelector('.likes');
+        let postbody = JSON.stringify({change: 'increment'})
+        if (likesEle.classList.contains('liked')) {
+            postbody = JSON.stringify({change: 'decrement'})
+        }
+
         fetch('/like/' + postId, {
             method: 'POST',
             headers: {
-                
+                'Accept': 'application/json',
+                'Content-Type': 'application/json'
             },
-            body: ""
+            body: postbody
             })
         .then(statusCheck)
         .then(processData)
@@ -44,10 +54,21 @@
 
     //`````````````````````````````````````````````````````````````````````````````
         function processData(data) {
-            if (data.likes) {
+            console.log(data);
+            if (data.postId) {
                 let post = document.getElementById(data.postId);
                 let likesEle = post.querySelector('.likes');
-                likesEle.textContent = 'Likes: ' + data.likes;
+                console.log(data.likes)
+                if (data.change == 'increment') {
+                    likesEle.textContent = '❤️ ' + data.likes;
+                    likesEle.classList.remove('not-liked');
+                    likesEle.classList.add('liked');
+                } else {
+                    likesEle.textContent = '🤍 ' + data.likes;
+                    likesEle.classList.remove('liked');
+                    likesEle.classList.add('not-liked');                    
+                }
+                
             } else {
                 console.log("Something went wrong!");
             }
