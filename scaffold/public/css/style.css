@@ -130,6 +130,8 @@ p {
 }
 
 .posts-list {
+	display: flex;
+	flex-direction: column;
 	width: 60vw;
 }
 
@@ -247,4 +249,15 @@ footer {
 
 button:hover {
 	cursor: pointer;
+}
+
+.post-sorting {
+	display: flex;
+	flex-direction: row;
+	align-self: center;
+	align-items: center;
+	gap: 10px;
+	margin-top: 10px;
+	margin-bottom: -10px;
+
 }

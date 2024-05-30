@@ -21,10 +21,11 @@
     <h2 class="posts-title">Your {{{postNeoType}}}s</h2>
     
     <!-- you'll need to make this conditaionl and #each expression work -->
-    {{#if user.posts.length}}
-        <ul>
-            {{#each user.posts}}
-                {{> post this user=../user}}
+    
+    
+    {{#if posts.length}}
+            {{#each posts}}
+                {{> post this user=../user}}             
             {{/each}}
         </ul>
     {{else}}

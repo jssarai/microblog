@@ -34,8 +34,13 @@
         <!-- recent posts -->
 
         {{#if posts.length}}
-        <h2 class="posts-title">Recent Posts</h2>
-        <ul>
+        <h2 class="posts-title">Posts</h2>
+        <div class="post-sorting">
+            <h3>Sort By: </h3>
+            <button type="button" class="post-button" onclick=sortPosts('timestamp')>Date</button>
+            <button type="button" class="post-button" onclick=sortPosts('likes')>Likes</button>
+        </div>
+        <ul id="posts-parent">
             {{#each posts}}
                 <!-- you have to pass the user in to posts and this is the syntax -->  
                 {{> post this user=../user}}            
@@ -109,5 +114,44 @@ function insertEmoji(emoji) {
     textarea.focus();  // Keep focus on the textarea
 
 }
+
+
+function sortPosts(field) {
+    fetch('/sort', {
+        method: 'POST',
+        headers: {
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({sortBy: field})
+            })
+        .then(statusCheck)
+        .then(processData)
+        .catch(handleError);
+
+        function statusCheck(res) {
+            if (!res.ok) {
+                throw new Error('Failed to fetch: ' + res.statusText);
+            }
+            return res.json();  // Assuming the server response is in JSON format
+    }
+
+    //`````````````````````````````````````````````````````````````````````````````
+        function processData(data) {
+            if (data.posts) {
+                let allPosts = document.getElementById("posts-parent");
+                data.posts.forEach(e => {
+                    let post = document.getElementById(e.id);
+                    allPosts.appendChild(post);
+                });
+            } else {
+                console.log("Something went wrong!");
+            }
+        }
+
+        function handleError(error) {
+            console.error('Error sorting', error);
+        }
+    }
 </script>
 

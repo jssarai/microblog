@@ -2,13 +2,74 @@ const express = require('express');
 const expressHandlebars = require('express-handlebars');
 const session = require('express-session');
 const canvas = require('canvas');
+const sqlite = require('sqlite');
+const sqlite3 = require('sqlite3');
+const passport = require('passport');
+const GoogleStrategy = require('passport-google-oauth20').Strategy;
+const dotenv = require('dotenv');
+var crypto = require('crypto');
+
+// Load environment variables from .env file
+dotenv.config();
+
+// Express app setup
+const app = express();
+const PORT = 3000;
+
+// Use environment variables for client ID and secret
+const CLIENT_ID = process.env.CLIENT_ID;
+const CLIENT_SECRET = process.env.CLIENT_SECRET;
+
+// Configure passport
+passport.use(new GoogleStrategy({
+    clientID: CLIENT_ID,
+    clientSecret: CLIENT_SECRET,
+    callbackURL: `http://localhost:${PORT}/auth/google/callback`
+}, (token, tokenSecret, profile, done) => {
+    return done(null, profile);
+}));
+
+passport.serializeUser((user, done) => {
+    done(null, user);
+});
+
+passport.deserializeUser((obj, done) => {
+    done(null, obj);
+});
 
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 // Configuration and Setup
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-const app = express();
-const PORT = 3000;
+
+//Initialize Database
+
+// Placeholder for the database file name
+const dbFileName = 'microblogData.db';
+
+let db;
+let sortBy = 'timestamp';
+async function showDatabaseContents() {
+    db = await sqlite.open({ filename: dbFileName, driver: sqlite3.Database });
+
+    console.log('Opening database file:', dbFileName);
+
+    // Check if the users table exists
+    const usersTableExists = await db.get(`SELECT name FROM sqlite_master WHERE type='table' AND name='users';`);
+    if (!usersTableExists) {
+        console.log('Users table does not exist.');
+    }
+
+    // Check if the posts table exists
+    const postsTableExists = await db.get(`SELECT name FROM sqlite_master WHERE type='table' AND name='posts';`);
+    if (!postsTableExists) {
+        console.log('Posts table does not exist.');
+    }
+}
+
+showDatabaseContents().catch(err => {
+    console.error('Error showing database contents:', err);
+});
 
 /*
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -95,14 +156,15 @@ app.use(express.json());                            // Parse JSON bodies (as sen
 // We pass the posts and user variables into the home
 // template
 //
-app.get('/', (req, res) => {
-    const posts = getPosts();
-    const user = getCurrentUser(req) || {};
+app.get('/', async (req, res) => {
+    let posts =  await getPosts();
+    const user = await getCurrentUser(req) || {};
     res.render('home', { posts, user });
 });
 
 // Register GET route is used for error response from registration
 //
+/*
 app.get('/register', (req, res) => {
     res.render('loginRegister', { regError: req.query.error });
 });
@@ -115,6 +177,7 @@ app.get('/login', (req, res) => {
 
 // Error route: render error page
 //
+*/
 app.get('/error', (req, res) => {
     res.render('error');
 });
@@ -126,9 +189,9 @@ app.get('/post/:id', (req, res) => {
     // TODO: Render post detail page
 });
 */
-app.post('/posts', (req, res) => {
+app.post('/posts', async (req, res) => {
     // TODO: Add a new post and redirect to home
-    addPost(req.body.title, req.body.content, getCurrentUser(req));
+    addPost(req.body.title, req.body.content, await getCurrentUser(req));
     res.redirect('/');
 });
     
@@ -136,22 +199,83 @@ app.post('/posts', (req, res) => {
 
 app.post('/like/:id', (req, res) => {updatePostLikes(req, res)});
 
-app.get('/profile', isAuthenticated, (req, res) => {
+app.get('/profile', isAuthenticated, async (req, res) => {
     // TODO: Render profile page
-    let user = getCurrentUser(req);
-    res.render('profile', { user });
+    let user =  await getCurrentUser(req);
+    let posts = await db.all('SELECT * FROM posts where username = ?', [user.username]);
+    res.render('profile', { posts, user });
 });
 app.get('/avatar/:username', (req, res) => {renderProfile(req, res)});
     // TODO: Serve the avatar image for the user
 
+    /*
 app.post('/register', (req, res) => {registerUser(req, res)});
 
 app.post('/login', (req, res) => {loginUser(req, res)});
-
+*/
 app.get('/logout', (req, res) => {logoutUser(req, res)});
 
 app.post('/delete/:id', isAuthenticated, (req, res) => {removePost(req, res)});
     // TODO: Delete a post if the current user is the owner
+
+
+
+
+
+//Google OAuth
+app.get('/auth/google', passport.authenticate('google', { scope: ['profile'] }), (req, res) => {
+    passport.use (new GoogleStrategy( {
+        clientID: process.env.CLIENT_ID,
+        clientSecret: process.env.CLIENT_SECRET,
+        callbackURL: "http://localhost:3000/auth/google/callback",
+        userProfileURL:
+        'https://www.googleapis.com/oauth2/v3/userinfo',
+        scope: ['profile']
+        }));      
+});
+
+app.get('/registerUsername', (req, res) => {
+    res.render('registerUsername', { regError: req.query.error });
+});
+
+app.get('/auth/google/callback', passport.authenticate('google', { failureRedirect: '/' }), async (req, res) => {
+    const googleId = req.user.id;
+    var hashedGoogleId = crypto.createHash('md5').update(googleId).digest('hex');
+
+
+    //const hashedGoogleId = bcrypt.hash(googleId);
+    req.session.hashedGoogleId = hashedGoogleId;
+    // Check if user already exists
+    try {
+        let localUser = await findUserByHashedGoogleId(hashedGoogleId);
+        if (localUser) {
+            req.session.userId = localUser.id;
+            req.session.loggedIn = true;
+            res.redirect('/');
+        } else {
+            res.redirect('/registerUsername');
+        }
+    }
+    catch(err){
+        console.error('Error finding user:', err);
+        res.redirect('/error');
+    }
+});
+
+app.post('/sort', async (req, res) => {
+    if(sortBy == req.body.sortBy) {
+        return
+    }
+    sortBy = req.body.sortBy;
+    posts = await getPosts();
+    res.json({"posts": posts});
+});
+
+app.post('/registerUsername', (req, res) => {registerUser(req, res)});
+
+app.get('/googleLogout', (req, res) => {
+    res.render('googleLogout');
+});
 
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 // Server Activation
@@ -168,23 +292,24 @@ app.listen(PORT, () => {
 // Example data for posts and users
 
 
-
+/*
 let posts = [
-    { id: 1, title: 'Sample Post', content: 'This is a sample post.', username: 'SampleUser', timestamp: '01/01/2024, 10:00:00 AM', likes: 0, avatar_url: 'data:image/png;base64,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'},
+    // { id: 1, title: 'Sample Post', content: 'This is a sample post.', username: 'SampleUser', timestamp: '01/01/2024, 10:00:00 AM', likes: 0, avatar_url: 'data:image/png;base64,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'},
     { id: 2, title: 'Another Post', content: 'This is another sample post.', username: 'AnotherUser', timestamp: '02/01/2024, 12:00:00 PM', likes: 0, avatar_url: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGQAAABkCAYAAABw4pVUAAAABmJLR0QA/wD/AP+gvaeTAAAFN0lEQVR4nO2bXUgUXRjH/9O+GGWWWa0UZEFk0IXtRZBgdZdGEd2k1JUUVrpClFDRdXTTXSDVRURBUVEERRIoXYRk0E30QfRBFOxFZWW0rVLm7vNenLdmphltdj275zm+zw8eGM/MnI/5nWfGObvrEEAQ2DDNdAcEPyKEGSKEGSKEGSKEGSKEGSKEGSKEGSKEGSKEGSKEGSKEGSKEGSKEGSKEGSKEGSKEGSKEGSKEGSKEGSKEGSKEGSKEGSKEGSKEGSKEGSKEGSKEGXYLcRygqwtYutR0T/RBAFkbTU1EREQnTpjvi6awW8jNm0pIOk1UUWG+PxrC3ltWTQ2waZParqgAduww2x9N2CukowOIxdy/k0lzfdGIQ7DwF1RlZUAqBcTj/vKGBmBgwEyfNGFnhrS0BGUAUyJL7MyQ+/eB+vpg+eioerZ8+FD6PmnCvgxJJMJlAOpWtmtXafujGfuEdHa623fuBPfv2eN/2NuG6f+784rKSqJMRr17DA0RzZtH9OkTBdiyxXxf/xfvITt3AuXlavvMGeDzZ+DcueBxHR0l7ZZWTM+IyOE4RC9eqAzI5YiWL1fly5YRZbP+DPHutyzsyZDGRqC2Vm3fvg28eqW2X78G+vr8xzoOsHt3afunC9MzInLcuOFmwObN/n1btwafI0NDRDNnmu93nmGHkJoaorExdaHfviWKxfz7YzGiN2+CUlpbzfc9z7DjltXe7v4re+oUkM3692ez6iH/JzY+3E3PiL9GWRnR+/dqxn//ThSPhx+3YIHa/yerV5sfw5TKkJYWoLpabV+5AgwOhh/38SNw/Xqw3LYsMT0j/hoDA+5sX7Nm4mPXrQtmyMgIUVWV+XFEDN5CEgn3wj58GO2cx4+DUrq6zI8lYvC+ZXnXrbq7o51z+nSwLJkEpvEe6m9Mz4hxw7tu9eULUXl5tPNmzSL6+jWYJY2N5sdkdYZ4163OngWGh6Odl8kAFy4Ey215uJueEaHhOETPn6uZncsR1dbmd/7Kleo8L2NjREuWmB+blRmyYQOwYoXa7usDXr7M7/xnz4D+fn9ZLAa0tenpXxH5x3QHQvHeXkZGgMOH868jnQ6WtbUBR4+qj3q5YjpFA+FdtyoG27ebH+MEwS9D9u511616eoCnTwuvK5EAmpr8ZckkcPly4XUWG9MzwhfedasfP4iqqydX3+LF4dlWV2d+rOMEr4d6c7O7bnXt2uS/zpNKAbduBcvb2ydXbzExPSN8ce+eO4sbGvTU+esb8l6+fSOaPdv8eEOCj5BVq9wL9uiRvnq9n8V76ew0P+aQ4HPL2rfP3T55Ul+9RHZ9eGV6RhBAtGiR++FSOq3Wo3TWH48TjY4Gs2TjRvNjZ5khBw4A06er7atX1XqUTgYHgd7eYPmRI3rb0YHpGUGVlf7V2WKtyra2hr8orl1rPCu8YV7I8eP+CzR/fnHaqasLF3L3rnrwm74O/4XZW1Z9PbB/v79szpzitOU44eXr1wMHDxanzUIwNhu2bXPfyr309xMtXKi3raoqot7e8AwhUkv1x46x+OFoaYXMmEF08SLRu3fjXxwitdzx4AHRpUtEzc2FtTV3LlF3N1FPD9Hw8MTt/SKdVt+QPHTImJDSLy6mUsD589GPz+UKbyuTAZ48UZEPP38W3uYksfMnbVMYHu8hwm9ECDNECDNECDNECDNECDNECDNECDNECDNECDNECDNECDNECDNECDNECDNECDNECDNECDNECDNECDNECDNECDNECDNECDNECDNECDNECDNECDP+BaAWl8h9XJZeAAAAAElFTkSuQmCC'},
 ];
 
 let users = [];
-/*
+
 let users = [
     { id: 1, username: 'SampleUser', avatar_url: undefined, memberSince: '2024-01-01 08:00' },
     { id: 2, username: 'AnotherUser', avatar_url: undefined, memberSince: '2024-01-02 09:00' },
 ];
 */
+
 // Function to find a user by username
-function findUserByUsername(username) {
+async function findUserByUsername(username) {
     // TODO: Return user object if found, otherwise return undefined
-    let user = users.find(e => e.username === username);
+    let user = await db.get('SELECT * FROM users WHERE username = ?', [username]);
     if(user) {
         return user
     } else {
@@ -193,9 +318,19 @@ function findUserByUsername(username) {
 }
 
 // Function to find a user by user ID
-function findUserById(userId) {
+async function findUserById(userId) {
     // TODO: Return user object if found, otherwise return undefined
-    let user = users.find(e => e.id === userId);
+    let user = await db.get('SELECT * FROM users WHERE id = ?', [userId]);
+    if(user) {
+        return user
+    } else {
+        return undefined;
+    }
+}
+
+async function findUserByHashedGoogleId(hashedGoogleId) {
+    // TODO: Return user object if found, otherwise return undefined
+    let user = await db.get('SELECT * FROM users WHERE hashedGoogleId = ?', [hashedGoogleId]);
     if(user) {
         return user
     } else {
@@ -204,17 +339,18 @@ function findUserById(userId) {
 }
 
 // Function to add a new user
-function addUser(username) {
+async function addUser(username, hashedGoogleId) {
     // TODO: Create a new user object and add to users array
     let user = new Object();
     user.username = username;
-    user.id = users.length+1;
-    user.posts = [];
-    user.likes = [];
-    user.avatar_url = null;
+    user.avatar_url = generateAvatar(user.username[0].toUpperCase());
     let date = new Date;
     user.memberSince = date.toLocaleString();
-    users.push(user)
+
+    await db.run(
+        'INSERT INTO users (username, hashedGoogleId, avatar_url, memberSince) VALUES (?, ?, ?, ?)',
+        [user.username, hashedGoogleId, user.avatar_url, user.memberSince]
+    );
 }
 
 // Middleware to check if user is authenticated
@@ -227,11 +363,22 @@ function isAuthenticated(req, res, next) {
     }
 }
 
-
-// Function to register a user
-function registerUser(req, res) {
+async function registerUser(req, res) {
     const username = req.body.username;
-    if (findUserByUsername(username)) {
+    if (await findUserByUsername(username)) {
+        res.redirect('/registerUsername?error=Username+already+exists');
+    } else {
+        addUser(username, req.session.hashedGoogleId);
+        let user = await findUserByUsername(username);
+        req.session.userId = user.id;
+        req.session.loggedIn = true;
+        res.redirect('/');
+    }
+}
+// Function to register a user
+async function oldRegisterUser(req, res) {
+    const username = req.body.username;
+    if (await findUserByUsername(username)) {
         res.redirect('/register?error=Username+already+exists');
     } else {
         addUser(username);
@@ -240,14 +387,14 @@ function registerUser(req, res) {
 }
 
 // Function to login a user
-function loginUser(req, res) {
+async function loginUser(req, res) {
     // TODO: Login a user and redirect appropriately
     const username = req.body.username;
-    let user = findUserByUsername(username);
+    let user = await findUserByUsername(username);
     if (user) {//valid
         req.session.userId = user.id;
         req.session.loggedIn = true;
-        handleAvatar(req);
+        //handleAvatar(req);
         res.redirect('/');
     } else {//invalid user
         res.redirect('/login?error=Username+does+not+exist');
@@ -256,37 +403,39 @@ function loginUser(req, res) {
 
 // Function to logout a user
 function logoutUser(req, res) {
-    let user = getCurrentUser(req)
+    //let user = getCurrentUser(req)
     req.session.userId = '';
     req.session.loggedIn = false;
-    res.redirect('/');
+    req.session.hashedGoogleId = '';
+    res.redirect('/googleLogout');
 
     // TODO: Destroy session and redirect appropriately
 }
 
 // Function to render the profile page
 function renderProfile(req, res) {
-    handleAvatar(req);
+    //handleAvatar(req);
     res.redirect('/profile');
     // TODO: Fetch user posts and render the profile page
 }
 
 // Function to update post likes
-function updatePostLikes(req, res) {
+async function updatePostLikes(req, res) {
     if (!req.session.loggedIn) {
         return
     }
     let user = getCurrentUser(req);
     let id = req.params.id;
     let change = req.body.change;
-    let post = posts.find(e => e.id == id);
-    if (!(user.posts.includes(post))) {
+    let post = await db.get('SELECT * from posts where id = ?', [id]);
+    //let post = posts.find(e => e.id == id);
+    if (post.username != user.username) {
         if (change == 'increment') {
+            await db.run('UPDATE posts SET likes = ? where id = ?', [post.likes + 1, id]);
             post.likes = post.likes + 1;
-            user.likes.push(post);
         } else {
+            await db.run('UPDATE posts SET likes = ? where id = ?', [post.likes - 1, id]);
             post.likes = post.likes - 1;
-            user.likes = user.likes.filter(e => e.id != id); 
         }
     } 
     res.json({ "postId": post.id, "change": change, "likes": post.likes });
@@ -294,16 +443,17 @@ function updatePostLikes(req, res) {
 
 }
 
-function removePost(req, res) {
+
+async function removePost(req, res) {
     if (!req.session.loggedIn) {
         return
     }
-    let user = getCurrentUser(req);
+    let user = await getCurrentUser(req);
     let id = req.params.id;
-    let post = posts.find(e => e.id == id);
-    if (post.username === user.username) {
-        posts = posts.filter(e => e.id != id); 
-        delete post;
+    let post = await db.get('SELECT * from posts where id = ?', [id]);
+    //let post = posts.find(e => e.id == id);
+    if (post.username == user.username) {
+        await db.run('DELETE from posts where id = ?', [id])
         res.json({ "postId": id});
     }
 }
@@ -312,10 +462,9 @@ function removePost(req, res) {
 function handleAvatar(req, res) {
     let user = getCurrentUser(req);
     if (!user.avatar_url) {
-        user.avatar_url = generateAvatar(user.username[0].toUpperCase());
+        console.log('No Avatar')
+        //user.avatar_url = generateAvatar(user.username[0].toUpperCase());
     }
-    console.log(user)
-    console.log(user.avatar_url)
     // TODO: Generate and serve the user's avatar image
 }
 
@@ -326,15 +475,32 @@ function getCurrentUser(req) {
 }
 
 // Function to get all posts, sorted by latest first
-function getPosts() {
-    return posts.slice().reverse();
+async function getPosts() {
+    const postsTableExists = await db.get(`SELECT name FROM sqlite_master WHERE type='table' AND name='posts';`);
+    if (postsTableExists) {
+        let posts = undefined;
+        if (sortBy == 'timestamp') {
+            posts = await db.all('SELECT * FROM posts ORDER BY timestamp DESC');
+        } else {
+            posts = await db.all('SELECT * FROM posts ORDER BY likes DESC');
+        }
+        if (posts.length > 0) {
+            return posts;
+        } else {
+            console.log('No posts found.');
+        }
+    } else {
+        console.log('Posts table does not exist.');
+    }
+    //return posts.slice().reverse();
 }
 
 // Function to add a new post
-function addPost(title, content, user) {
+async function addPost(title, content, user) {
     // TODO: Create a new post object and add to posts array
     let post = new Object();
-    post.id = posts[posts.length-1].id+1;
+    //let maxid = 
+    //post.id = posts[posts.length-1].id+1;
     post.title = title;
     post.content = content;
     post.username = user.username;
@@ -342,9 +508,12 @@ function addPost(title, content, user) {
     post.timestamp = date.toLocaleString();
     post.likes = 0;
     post.avatar_url = user.avatar_url;
-    posts.push(post);
-
-    user.posts.push(post);
+    //posts.push(post);
+    //user.posts.push(post);
+    await db.run(
+        'INSERT INTO posts (title, content, username, timestamp, likes, avatar_url) VALUES (?, ?, ?, ?, ?, ?)',
+        [post.title, post.content, post.username, post.timestamp, post.likes, post.avatar_url]
+    );
 }
 
 
@@ -373,8 +542,6 @@ function generateAvatar(letter, width = 100, height = 100) {
     context.fillText(letter, (can.width / 2), (can.height / 2));
     //context.fill();
     let url = can.toDataURL();
-    console.log(can);
-    console.log(url);
     return url;
     // TODO: Generate an avatar image with a letter
     // Steps:

@@ -3,7 +3,6 @@
     <div class="post-avatar">
         <!-- the user's avatar -->
         <img src={{avatar_url}} alt="Profile Image" title="Avatar" class="avatar">
-        
     </div>
     <div class="post-content preserve-newlines">
         <!-- the post -->
@@ -54,11 +53,9 @@
 
     //`````````````````````````````````````````````````````````````````````````````
         function processData(data) {
-            console.log(data);
             if (data.postId) {
                 let post = document.getElementById(data.postId);
                 let likesEle = post.querySelector('.likes');
-                console.log(data.likes)
                 if (data.change == 'increment') {
                     likesEle.textContent = '❤️ ' + data.likes;
                     likesEle.classList.remove('not-liked');
