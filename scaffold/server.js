@@ -134,7 +134,7 @@ app.use(
 
 
 app.use((req, res, next) => {
-    res.locals.appName = "Nature's Island";
+    res.locals.appName = "Aggie Sqaure";
     res.locals.copyrightYear = 2024;
     res.locals.postNeoType = 'Post';
     res.locals.loggedIn = req.session.loggedIn || false;
@@ -156,8 +156,9 @@ app.use(express.json());                            // Parse JSON bodies (as sen
 //
 app.get('/', async (req, res) => {
     let posts =  await getPosts();
+    let comments = await getComments();
     const user = await getCurrentUser(req) || {};
-    res.render('home', { posts, user });
+    res.render('home', { posts, user, comments });
 });
 
 // Error route: render error page
@@ -171,13 +172,41 @@ app.post('/posts', async (req, res) => {
     addPost(req.body.title, req.body.content, await getCurrentUser(req));
     res.redirect('/');
 });
+
+app.post('/comments', async (req, res) => {
+    addComment(req.body.postid, req.body.content, await getCurrentUser(req));
+    res.redirect('/');
+});
+
+app.post('/follows', async (req, res) => {
+    addFollow(req.body.followee, req.body.follower);
+    res.json({postid: req.body.postid});
+});
+
+app.get('/following', async (req, res) => {
+    if (!req.session.userId) {
+        return
+    }
+    let user =  await getCurrentUser(req);
+    let followingRecords = await db.all('SELECT followee from followers where follower=?', [user.username]);
+    let following = [];
+    followingRecords.forEach(e => {
+        following.push(e.followee);
+    })
+    res.json({"following": following});
+})
     
 app.post('/like/:id', (req, res) => {updatePostLikes(req, res)});
 
+app.post('/likecomment', (req, res) => {updateCommentLikes(req, res)});
+
 app.get('/profile', isAuthenticated, async (req, res) => {
     let user =  await getCurrentUser(req);
+    let comments = await getComments();
     let posts = await db.all('SELECT * FROM posts where username = ?', [user.username]);
-    res.render('profile', { posts, user });
+    let followers = await db.all('SELECT follower from followers where followee=?', [user.username]);
+    let followees = await db.all('SELECT followee from followers where follower=?', [user.username]);
+    res.render('profile', { posts, user, comments, followers, followees });
 });
 
 app.get('/avatar/:username', (req, res) => {renderProfile(req, res)});
@@ -185,6 +214,8 @@ app.get('/avatar/:username', (req, res) => {renderProfile(req, res)});
 app.get('/logout', (req, res) => {logoutUser(req, res)});
 
 app.post('/delete/:id', isAuthenticated, (req, res) => {removePost(req, res)});
+
+app.post('/deletecomment', isAuthenticated, (req, res) => {removeComment(req, res)});
 
 app.get('/registerUsername', (req, res) => {
     res.render('registerUsername', { regError: req.query.error });
@@ -354,6 +385,30 @@ async function updatePostLikes(req, res) {
 }
 
 
+async function updateCommentLikes(req, res) {
+    if (!req.session.loggedIn) {
+        return
+    }
+    let user = getCurrentUser(req);
+    let timestamp = req.body.timestamp;
+    let change = req.body.change;
+    console.log(timestamp);
+    let comment = await db.get('SELECT * from comments where timestamp = ?', [timestamp]);
+    console.log(comment);
+    if (comment.username != user.username) {
+        if (change == 'increment') {
+            await db.run('UPDATE comments SET likes = ? where timestamp = ?', [comment.likes + 1, timestamp]);
+            comment.likes = comment.likes + 1;
+        } else {
+            await db.run('UPDATE comments SET likes = ? where timestamp = ?', [comment.likes - 1, timestamp]);
+            comment.likes = comment.likes - 1;
+        }
+    } 
+    res.json({"change": change, "likes": comment.likes });
+
+}
+
+
 async function removePost(req, res) {
     if (!req.session.loggedIn) {
         return
@@ -364,6 +419,19 @@ async function removePost(req, res) {
     if (post.username == user.username) {
         await db.run('DELETE from posts where id = ?', [id])
         res.json({ "postId": id});
+    }
+}
+
+async function removeComment(req, res) {
+    if (!req.session.loggedIn) {
+        return
+    }
+    let user = await getCurrentUser(req);
+    let timestamp = req.body.timestamp;
+    let comment = await db.get('SELECT * from comments where timestamp = ?', [timestamp]);
+    if (comment.username == user.username) {
+        await db.run('DELETE from comments where timestamp = ?', [timestamp])
+        res.json({ "timestamp": timestamp});
     }
 }
 
@@ -392,6 +460,16 @@ async function getPosts() {
     }
 }
 
+async function getComments() {
+    const commentsTableExists = await db.get(`SELECT name FROM sqlite_master WHERE type='table' AND name='comments';`);
+    if (commentsTableExists) {
+        let comments = await db.all('SELECT * FROM comments ORDER BY timestamp ASC');
+        return comments;
+    } else {
+        console.log('comments table does not exist.');
+    }
+}
+
 // Function to add a new post
 async function addPost(title, content, user) {
     let post = new Object();
@@ -408,7 +486,29 @@ async function addPost(title, content, user) {
     );
 }
 
+async function addComment(postid, content, user) {
+    let comment = new Object();
+    comment.postid = postid;
+    comment.content = content;
+    comment.username = user.username;
+    let date = new Date;
+    comment.timestamp = date.toLocaleString();
+    comment.avatar_url = user.avatar_url;
+    comment.likes = 0;
+    await db.run(
+        'INSERT INTO comments (postid, content, username, timestamp, avatar_url, likes) VALUES (?, ?, ?, ?, ?, ?)',
+        [comment.postid, comment.content, comment.username, comment.timestamp, comment.avatar_url, comment.likes]
+    );
+}
 
+async function addFollow(followee, follower) {
+    const alreadyFollowing = await db.get('SELECT followee FROM followers where followee=? and follower=?', [followee, follower]);
+    if (alreadyFollowing) {
+        await db.run('DELETE from  followers where followee=? and follower=?', [followee, follower]);
+    } else {
+        await db.run('INSERT INTO followers (followee, follower) VALUES (?, ?)',[followee, follower]);
+    }
+}
 
 // Function to generate an image avatar
 function generateAvatar(letter, width = 100, height = 100) {

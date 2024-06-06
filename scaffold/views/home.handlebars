@@ -36,14 +36,65 @@
         {{#if posts.length}}
         <h2 class="posts-title">Posts</h2>
         <div class="post-sorting">
-            <h3>Sort By: </h3>
+            {{#if loggedIn}}
+                <h3>Show: </h3>
+                <button type="button" class="post-button" onclick=showPosts('all')>All</button>
+                <button type="button" class="post-button" onclick=showPosts('Following')>Following</button>
+            {{/if}}
+            <h3 class="left-margin">Sort By: </h3>
             <button type="button" class="post-button" onclick=sortPosts('timestamp')>Date</button>
-            <button type="button" class="post-button" onclick=sortPosts('likes')>Likes</button>
+            <button type="button" class="post-button" onclick=sortPosts('likes')>Likes</button>        
+        </div>
+            
+
         </div>
         <ul id="posts-parent">
             {{#each posts}}
                 <!-- you have to pass the user in to posts and this is the syntax -->  
-                {{> post this user=../user}}            
+                <div id="post-container">
+                {{> post this user=../user loggedIn=../loggedIn}}
+                {{#if ../comments.length}}
+                    <ul id="replies">
+                        {{#each ../comments}}
+                            {{#ifCond postid ../id}}
+                            <div class="reply">
+                                <div class="reply-avatar-parent">
+                                    <!-- the user's avatar -->
+                                    <img src={{avatar_url}} alt="Profile Image" title="Avatar" class="reply-avatar">
+                                </div>
+                                <div class="reply-content preserve-newlines">
+                                    <!-- the post -->
+                                    <p class="comment-text">{{content}}</p>
+                                    <div class="reply-status-bar">
+                                        {{#ifCond username ../../user.username}}
+                                            <p  class='hover' onclick="handleCommentDeleteClick('{{timestamp}}', this)">🗑️ {{likes}}</p>
+                                        {{else}}
+                                            <p class = ' hover not-liked likes' onclick="handleCommentLikeClick('{{timestamp}}', this)">🤍 {{likes}}</p>
+                                        {{/ifCond}}
+                                        <p>{{username}}</p>
+                                        <p>{{timestamp}}</p>
+                                    </div>        
+                                </div>
+                            </div>
+                            {{else}}
+                            {{/ifCond}}        
+                        {{/each}}                
+                    </ul>
+                    {{else}}
+                        <!-- no replies -->
+                    {{/if}}
+                {{#if ../loggedIn}}
+                    <form class='post-form' action="/comments" method="POST">
+                        <!-- title input field name = "title" -->
+                        <!-- text area input field name = "content" -->
+                        <input type='hidden' name='postid' value={{id}} />
+                        <textarea id="comment-textarea" type="text" name="content" placeholder="Comment"></textarea>
+                        <div class="form-actions">
+                            <button type="submit" class="post-button">Post</button>
+                        </div>
+                    </form>
+                {{/if}}
+            </div>                    
             {{/each}}
         </ul>
         {{else}}
@@ -115,6 +166,59 @@ function insertEmoji(emoji) {
 
 }
 
+window.onload = function() {
+    fetch('/following')
+    .then(statusCheck)
+    .then(processData)
+    .catch(handleError);
+
+    function statusCheck(res) {
+        if (!res.ok) {
+            throw new Error('Failed to fetch: ' + res.statusText);
+        }
+        return res.json();  // Assuming the server response is in JSON format
+    }
+
+    //`````````````````````````````````````````````````````````````````````````````
+    function processData(data) {
+        if (data.following) {
+            let allPosts = document.querySelectorAll(".post");
+            allPosts.forEach(e => {
+            let username = e.querySelector('.username').innerHTML;
+            if (data.following.includes(username)) {
+                let post = document.getElementById(e.id);
+                let postBtn = post.querySelector('.follow-button');
+                postBtn.textContent = 'Unfollow';
+                postBtn.classList.add('unfollow');
+                postBtn.classList.remove('follow');
+            }
+            });
+            } else {
+                console.log("Something went wrong!");
+            }
+        }
+
+        function handleError(error) {
+            console.error('Error updating likes', error);
+        }
+}
+
+function showPosts(field) {
+    if (field == 'all') {
+        let allPosts = document.querySelectorAll('.hide');
+        allPosts.forEach(e => {
+            e.classList.remove('hide')
+        });
+    } else {
+        let allPosts = document.querySelectorAll('.post');
+        allPosts.forEach(e => {
+            if (e.querySelector('.unfollow')) {
+            } else {
+                e.parentElement.classList.add('hide');
+            }
+        });
+    }
+}
 
 function sortPosts(field) {
     fetch('/sort', {
@@ -141,7 +245,7 @@ function sortPosts(field) {
             if (data.posts) {
                 let allPosts = document.getElementById("posts-parent");
                 data.posts.forEach(e => {
-                    let post = document.getElementById(e.id);
+                    let post = document.getElementById(e.id).parentElement;
                     allPosts.appendChild(post);
                 });
             } else {
@@ -152,6 +256,93 @@ function sortPosts(field) {
         function handleError(error) {
             console.error('Error sorting', error);
         }
+    }
+
+
+    function handleCommentLikeClick(timestamp, e) {
+        let likesEle = e;
+        let postbody = JSON.stringify({timestamp: timestamp, change: 'increment'})
+        if (likesEle.classList.contains('liked')) {
+            postbody = JSON.stringify({timestamp: timestamp, change: 'decrement'})
+        }
+
+        fetch('/likecomment', {
+            method: 'POST',
+            headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json'
+            },
+            body: postbody
+            })
+        .then(statusCheck)
+        .then(processData)
+        .catch(handleError);
+
+        function statusCheck(res) {
+            if (!res.ok) {
+                throw new Error('Failed to fetch: ' + res.statusText);
+            }
+            return res.json();  // Assuming the server response is in JSON format
+    }
+
+    //`````````````````````````````````````````````````````````````````````````````
+        function processData(data) {
+            if (data.change) {
+                if (data.change == 'increment') {
+                    likesEle.textContent = '❤️ ' + data.likes;
+                    likesEle.classList.remove('not-liked');
+                    likesEle.classList.add('liked');
+                } else {
+                    likesEle.textContent = '🤍 ' + data.likes;
+                    likesEle.classList.remove('liked');
+                    likesEle.classList.add('not-liked');                    
+                }
+                
+            } else {
+                console.log("Something went wrong!");
+            }
+        }
+
+        function handleError(error) {
+            console.error('Error updating likes', error);
+        }
+    }
+
+
+
+
+    function handleCommentDeleteClick(timestamp, e) {
+        let deleteEle = e;
+        e.parentElement.parentElement.parentElement.remove();
+        let postbody = JSON.stringify({timestamp: timestamp})
+        fetch('/deletecomment', {
+            method: 'POST',
+            headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json'
+            },
+            body: postbody
+            })
+        .then(statusCheck)
+        .then(processData)
+        .catch(handleError);
+        // you might want to "fetch" something...        
+        function statusCheck(res) {
+            if (!res.ok) {
+                throw new Error('Failed to fetch: ' + res.statusText);
+            }
+            return res.json();  // Assuming the server response is in JSON format
+        }
+        function processData(data) {
+            if (data.timestamp) {
+            } else {
+                console.log("Something went wrong!");
+            }
+        }
+
+        function handleError(error) {
+            console.error('Error removing post', error);
+        }    
     }
 </script>
 

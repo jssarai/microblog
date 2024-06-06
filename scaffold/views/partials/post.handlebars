@@ -14,15 +14,68 @@
                 {{else}}
                     <p class = ' hover not-liked likes' onclick=handleLikeClick(({{id}}))>🤍 {{likes}}</p>
                 {{/ifCond}}
-                <p>{{username}}</p>
                 <p>{{timestamp}}</p>
+                <p class="username">{{username}}</p>
+                {{#ifCond username user.username}}
+                {{else}}
+                    {{#if loggedIn}}      
+                        <button onclick="handleFollowClick('{{id}}', '{{user.username}}', '{{username}}')" class="follow-button follow post-button">Follow</button>
+                    {{/if}}
+                    {{/ifCond}}
+                
             <!-- everything that is shown in the status bar -->
             <!-- Heart = ♥ -->
             <!-- font awesome  trashcan = <i class="fas fa-trash-alt"> </i>-->
         </div>        
     </div>
+
 </div>
 <script>
+    function handleFollowClick(postid, follower, followee) {
+        let postbody = JSON.stringify({postid: postid, follower: follower, followee: followee})
+
+        fetch('/follows', {
+            method: 'POST',
+            headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json'
+            },
+            body: postbody
+            })
+        .then(statusCheck)
+        .then(processData)
+        .catch(handleError);
+
+        function statusCheck(res) {
+            if (!res.ok) {
+                throw new Error('Failed to fetch: ' + res.statusText);
+            }
+            return res.json();  // Assuming the server response is in JSON format
+        }
+
+        function processData(data) {
+            if (data.postid) {
+                let post = document.getElementById(data.postid);
+                let FollowEle = post.querySelector('.follow-button');
+                if (FollowEle.classList.contains('follow')) {
+                    FollowEle.textContent = 'Unfollow';
+                    FollowEle.classList.remove('follow');
+                    FollowEle.classList.add('unfollow');
+                } else {
+                    FollowEle.textContent = 'Follow';
+                    FollowEle.classList.remove('unfollow');
+                    FollowEle.classList.add('follow');                 
+                }
+                
+            } else {
+                console.log("Something went wrong!");
+            }
+        }
+
+        function handleError(error) {
+            console.error('Error updating likes', error);
+        }
+    }
 
     function handleLikeClick(postId) {
         let post = document.getElementById(postId);
@@ -105,7 +158,7 @@
     //`````````````````````````````````````````````````````````````````````````````
         function processData(data) {
             if (data.postId) {
-                let post = document.getElementById(data.postId);
+                let post = document.getElementById(data.postId).parentElement;
                 post.remove();
             } else {
                 console.log("Something went wrong!");
